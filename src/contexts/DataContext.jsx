@@ -226,9 +226,27 @@ export const DataProvider = ({ children }) => {
     setLoading(true);
     try {
       let query = supabase.from('orders').select('*, deals(*, products(*)), user_profiles!orders_vendor_id_fkey(*)');
+      
       if (options.vendorId) {
         query = query.eq('vendor_id', options.vendorId);
       }
+      
+      if (options.supplierId) {
+        // Fetch deals for the supplier first
+        const { data: supplierDeals, error: dealsError } = await supabase
+          .from('deals')
+          .select('id')
+          .eq('supplier_id', options.supplierId);
+        if (dealsError) throw dealsError;
+        
+        const dealIds = supplierDeals.map(d => d.id);
+        if (dealIds.length === 0) {
+          setOrders([]); // No deals, so no orders
+          return;
+        }
+        query = query.in('deal_id', dealIds);
+      }
+
       const { data, error } = await query;
       if (error) throw error;
       setOrders(data || []);
@@ -244,7 +262,15 @@ export const DataProvider = ({ children }) => {
     try {
       const { data, error } = await supabase.from('orders').update(updateData).eq('id', orderId).select().single();
       if (error) throw error;
-      await fetchOrders(); // Refetch to get fresh joined data
+      // Refetch orders for the relevant user after update
+      const { data: order } = await supabase.from('orders').select('deals(supplier_id), vendor_id').eq('id', orderId).single();
+      if (order?.deals?.supplier_id) {
+        await fetchOrders({ supplierId: order.deals.supplier_id });
+      } else if (order?.vendor_id) {
+        await fetchOrders({ vendorId: order.vendor_id });
+      } else {
+        await fetchOrders();
+      }
     } catch (e) {
       handleError(e, 'Failed to update order');
     } finally {
@@ -276,7 +302,7 @@ export const DataProvider = ({ children }) => {
       if (rpcError) throw rpcError;
 
       await fetchDeals();
-      await fetchOrders();
+      await fetchOrders({ vendorId });
       return { success: true, order: orderData };
     } catch (e) {
       handleError(e, 'Failed to join deal');

@@ -11,11 +11,9 @@ const SupplierOrders = () => {
 
   useEffect(() => {
     if (user?.id) {
-      fetchOrders();
+      fetchOrders({ supplierId: user.id });
     }
   }, [user]);
-
-  const myOrders = orders.filter(o => o.deals?.supplier_id === user?.id);
 
   const handleStatusChange = async (orderId, newStatus) => {
     await updateOrder(orderId, { status: newStatus });
@@ -51,9 +49,9 @@ const SupplierOrders = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {loading && myOrders.length === 0 ? (
+              {loading && orders.length === 0 ? (
                 <tr><td colSpan="6" className="text-center py-8">Loading orders...</td></tr>
-              ) : myOrders.map((order) => (
+              ) : orders.map((order) => (
                 <tr key={order.id}>
                   <td className="px-6 py-4">
                     <div className="font-medium text-gray-900">#{order.id}</div>

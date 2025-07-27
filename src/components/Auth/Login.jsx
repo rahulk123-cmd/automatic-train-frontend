@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, Navigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { Globe, Lock, Mail } from 'lucide-react';
@@ -14,15 +14,13 @@ const Login = () => {
   const { t, toggleLanguage, language } = useLanguage();
   const navigate = useNavigate();
 
+  // This effect handles redirection both on initial load (if already logged in)
+  // and after a successful login action.
   useEffect(() => {
     if (isAuthenticated && user?.role) {
-      navigate(`/${user.role}`);
+      navigate(`/${user.role}`, { replace: true });
     }
   }, [isAuthenticated, user, navigate]);
-
-  if (isAuthenticated && user?.role) {
-    return <Navigate to={`/${user.role}`} replace />;
-  }
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -31,11 +29,12 @@ const Login = () => {
   
     const result = await login(email, password);
   
+    setLoading(false);
+    
     if (!result.success) {
       setError(result.error || 'Login failed. Please check your credentials.');
     }
-    // Redirection is handled by the useEffect hook
-    setLoading(false);
+    // On success, the useEffect will handle the navigation.
   };
 
   const demoCredentials = [

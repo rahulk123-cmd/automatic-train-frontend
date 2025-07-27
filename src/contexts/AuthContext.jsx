@@ -16,75 +16,51 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const getSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        const { data: profile } = await supabase
-          .from('user_profiles')
-          .select('*')
-          .eq('id', session.user.id)
-          .single();
-        setUser({ ...session.user, ...profile });
-      }
+    const fetchUserAndProfile = async (sessionUser) => {
+      const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('*')
+        .eq('id', sessionUser.id)
+        .single();
+      setUser(profile ? { ...sessionUser, ...profile } : sessionUser);
       setLoading(false);
     };
-
-    getSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
         if (session?.user) {
-          const { data: profile } = await supabase
-            .from('user_profiles')
-            .select('*')
-            .eq('id', session.user.id)
-            .single();
-          setUser({ ...session.user, ...profile });
+          await fetchUserAndProfile(session.user);
         } else {
           setUser(null);
+          setLoading(false);
         }
-        setLoading(false);
       }
     );
 
     return () => {
-      subscription?.unsubscribe();
+      subscription.unsubscribe();
     };
   }, []);
 
   const login = async (email, password) => {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    if (error) return { success: false, error: error.message };
+    setLoading(true);
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
     
-    // The onAuthStateChange listener will handle setting the user state
-    return { success: true, user: data.user };
+    if (error) {
+      setLoading(false); // Ensure loading is stopped on error
+      return { success: false, error: error.message };
+    }
+    // On success, the onAuthStateChange listener will handle setting the user and loading state.
+    return { success: true };
   };
 
   const signup = async ({ email, password, role, fullName }) => {
-    // Pass role and fullName in user_metadata so the trigger can use it.
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: {
-        data: {
-          full_name: fullName,
-          role: role,
-        },
-      },
+      options: { data: { full_name: fullName, role: role } },
     });
-
-    if (error) {
-      console.error('Error signing up:', error);
-      return { success: false, error: error.message };
-    }
-
-    // The database trigger 'on_auth_user_created' will now handle
-    // inserting the row into the user_profiles table.
-    // The client-side insert is no longer needed.
-    
+    if (error) return { success: false, error: error.message };
     return { success: true, user: data.user };
   };
 
@@ -93,14 +69,7 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
-  const value = {
-    user,
-    loading,
-    login,
-    signup,
-    logout,
-    isAuthenticated: !!user,
-  };
+  const value = { user, loading, login, signup, logout, isAuthenticated: !!user };
 
   return (
     <AuthContext.Provider value={value}>

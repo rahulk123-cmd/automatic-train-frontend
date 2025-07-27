@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useData } from '../../contexts/DataContext';
 import { useLanguage } from '../../contexts/LanguageContext';
-import { Search, Filter, Loader } from 'lucide-react';
+import { Search, Filter } from 'lucide-react';
 import DealCard from '../Shared/DealCard';
+import DealCardSkeleton from '../Shared/DealCardSkeleton';
 
 const ProductBrowser = () => {
   const { products, deals, categories, fetchProducts, fetchDeals, fetchCategories, loading } = useData();
@@ -121,8 +122,8 @@ const ProductBrowser = () => {
       </div>
 
       {loading && (
-        <div className="flex justify-center items-center py-12">
-          <Loader className="w-8 h-8 animate-spin text-blue-600" />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[...Array(6)].map((_, i) => <DealCardSkeleton key={i} />)}
         </div>
       )}
 

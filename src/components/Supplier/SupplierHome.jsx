@@ -13,21 +13,17 @@ const SupplierHome = () => {
     if (user?.id) {
       fetchProducts(user.id);
       fetchDeals(user.id);
-      fetchOrders(); // Fetches all orders, will filter below
+      fetchOrders({ supplierId: user.id });
     }
   }, [user]);
 
-  const myProducts = products.filter(p => p.supplier_id === user?.id);
-  const myDeals = deals.filter(d => d.supplier_id === user?.id);
-  const myOrders = orders.filter(o => o.deals?.supplier_id === user?.id);
-
-  const totalRevenue = myOrders.reduce((sum, order) => sum + order.total_amount, 0);
-  const activeDealsCount = myDeals.filter(d => d.status === 'active' && d.is_approved).length;
+  const totalRevenue = orders.reduce((sum, order) => sum + order.total_amount, 0);
+  const activeDealsCount = deals.filter(d => d.status === 'active' && d.is_approved).length;
 
   const stats = [
     {
       title: language === 'en' ? 'Total Products' : 'कुल उत्पाद',
-      value: myProducts.length,
+      value: products.length,
       icon: Package,
       color: 'bg-blue-500'
     },
@@ -39,7 +35,7 @@ const SupplierHome = () => {
     },
     {
       title: language === 'en' ? 'Total Orders' : 'कुल ऑर्डर',
-      value: myOrders.length,
+      value: orders.length,
       icon: Users,
       color: 'bg-purple-500'
     },
@@ -51,8 +47,8 @@ const SupplierHome = () => {
     }
   ];
 
-  const recentDeals = myDeals.slice(0, 5);
-  const recentOrders = myOrders.slice(0, 5);
+  const recentDeals = deals.slice(0, 5);
+  const recentOrders = orders.slice(0, 5);
 
   return (
     <div className="space-y-6 pb-16 md:pb-0">
