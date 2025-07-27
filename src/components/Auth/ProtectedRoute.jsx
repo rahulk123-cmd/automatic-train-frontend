@@ -3,7 +3,7 @@ import { Navigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 
 const ProtectedRoute = ({ children, allowedRoles }) => {
-  const { user, loading } = useAuth();
+  const { user, loading, isAuthenticated } = useAuth();
 
   if (loading) {
     return (
@@ -13,12 +13,14 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
     );
   }
 
-  if (!user) {
-    return <Navigate to="/login" />;
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
   }
 
   if (allowedRoles && !allowedRoles.includes(user.role)) {
-    return <Navigate to="/login" />;
+    // Redirect to their own dashboard or a generic unauthorized page
+    // For now, redirecting to login is a safe default
+    return <Navigate to="/login" replace />;
   }
 
   return children;

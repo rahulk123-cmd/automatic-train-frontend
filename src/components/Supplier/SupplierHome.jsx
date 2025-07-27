@@ -1,21 +1,28 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useData } from '../../contexts/DataContext';
 import { useLanguage } from '../../contexts/LanguageContext';
-import { TrendingUp, Package, Zap, DollarSign, Users, Clock } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
+import { Package, Zap, DollarSign, Users } from 'lucide-react';
 
 const SupplierHome = () => {
-  const { products, deals, orders } = useData();
+  const { products, deals, orders, fetchProducts, fetchDeals, fetchOrders } = useData();
+  const { user } = useAuth();
   const { language } = useLanguage();
 
-  const myProducts = products.filter(p => p.supplierId === 2); // Current supplier
-  const myDeals = deals.filter(d => d.supplierId === 2);
-  const myOrders = orders.filter(o => {
-    const deal = deals.find(d => d.id === o.dealId);
-    return deal?.supplierId === 2;
-  });
+  useEffect(() => {
+    if (user?.id) {
+      fetchProducts(user.id);
+      fetchDeals(user.id);
+      fetchOrders(); // Fetches all orders, will filter below
+    }
+  }, [user]);
 
-  const totalRevenue = myOrders.reduce((sum, order) => sum + order.totalAmount, 0);
-  const activeDeals = myDeals.filter(d => d.status === 'active').length;
+  const myProducts = products.filter(p => p.supplier_id === user?.id);
+  const myDeals = deals.filter(d => d.supplier_id === user?.id);
+  const myOrders = orders.filter(o => o.deals?.supplier_id === user?.id);
+
+  const totalRevenue = myOrders.reduce((sum, order) => sum + order.total_amount, 0);
+  const activeDealsCount = myDeals.filter(d => d.status === 'active' && d.is_approved).length;
 
   const stats = [
     {
@@ -26,7 +33,7 @@ const SupplierHome = () => {
     },
     {
       title: language === 'en' ? 'Active Deals' : 'सक्रिय डील्स',
-      value: activeDeals,
+      value: activeDealsCount,
       icon: Zap,
       color: 'bg-green-500'
     },
@@ -61,7 +68,6 @@ const SupplierHome = () => {
         </p>
       </div>
 
-      {/* Stats Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((stat, index) => {
           const Icon = stat.icon;
@@ -87,9 +93,7 @@ const SupplierHome = () => {
         })}
       </div>
 
-      {/* Recent Activity */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Deals */}
         <div className="bg-white shadow rounded-lg">
           <div className="px-6 py-4 border-b border-gray-200">
             <h2 className="text-lg font-medium text-gray-900">
@@ -102,24 +106,24 @@ const SupplierHome = () => {
                 <div key={deal.id} className="flex items-center justify-between">
                   <div className="flex items-center">
                     <img
-                      src={deal.product.image}
-                      alt={deal.product.title}
+                      src={deal.products?.image_url}
+                      alt={deal.products?.title}
                       className="w-10 h-10 rounded object-cover mr-3"
                     />
                     <div>
                       <div className="font-medium text-gray-900 text-sm">
-                        {deal.product.title}
+                        {deal.products?.title}
                       </div>
                       <div className="text-sm text-gray-500">
-                        {deal.currentCount}/{deal.moq} {language === 'en' ? 'units' : 'यूनिट'}
+                        {deal.current_count}/{deal.moq} {language === 'en' ? 'units' : 'यूनिट'}
                       </div>
                     </div>
                   </div>
                   <div className="text-right">
                     <div className="text-sm font-medium text-gray-900">
-                      {deal.progress.toFixed(0)}%
+                      {deal.moq > 0 ? ((deal.current_count / deal.moq) * 100).toFixed(0) : 0}%
                     </div>
-                    <div className={`text-xs ${
+                    <div className={`text-xs capitalize ${
                       deal.status === 'active' ? 'text-green-600' : 
                       deal.status === 'completed' ? 'text-blue-600' : 'text-gray-500'
                     }`}>
@@ -132,7 +136,6 @@ const SupplierHome = () => {
           </div>
         </div>
 
-        {/* Recent Orders */}
         <div className="bg-white shadow rounded-lg">
           <div className="px-6 py-4 border-b border-gray-200">
             <h2 className="text-lg font-medium text-gray-900">
@@ -141,23 +144,21 @@ const SupplierHome = () => {
           </div>
           <div className="p-6">
             <div className="space-y-4">
-              {recentOrders.map((order) => {
-                const deal = deals.find(d => d.id === order.dealId);
-                return (
+              {recentOrders.map((order) => (
                   <div key={order.id} className="flex items-center justify-between">
                     <div>
                       <div className="font-medium text-gray-900 text-sm">
                         {language === 'en' ? 'Order' : 'ऑर्डर'} #{order.id}
                       </div>
                       <div className="text-sm text-gray-500">
-                        {deal?.product?.title}
+                        {order.deals?.products?.title || 'N/A'}
                       </div>
                     </div>
                     <div className="text-right">
                       <div className="text-sm font-medium text-gray-900">
-                        ₹{order.totalAmount.toFixed(2)}
+                        ₹{order.total_amount.toFixed(2)}
                       </div>
-                      <div className={`text-xs ${
+                      <div className={`text-xs capitalize ${
                         order.status === 'delivered' ? 'text-green-600' :
                         order.status === 'shipped' ? 'text-blue-600' :
                         order.status === 'confirmed' ? 'text-yellow-600' :
@@ -167,30 +168,7 @@ const SupplierHome = () => {
                       </div>
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Performance Chart Placeholder */}
-      <div className="bg-white shadow rounded-lg">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-lg font-medium text-gray-900">
-            {language === 'en' ? 'Sales Analytics' : 'बिक्री विश्लेषण'}
-          </h2>
-        </div>
-        <div className="p-6">
-          <div className="h-64 bg-gray-50 rounded-lg flex items-center justify-center">
-            <div className="text-center">
-              <TrendingUp className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-500">
-                {language === 'en' 
-                  ? 'Sales analytics chart would be displayed here'
-                  : 'बिक्री विश्लेषण चार्ट यहाँ प्रदर्शित होगा'
-                }
-              </p>
+                ))}
             </div>
           </div>
         </div>

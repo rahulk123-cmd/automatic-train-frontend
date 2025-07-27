@@ -1,22 +1,24 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useData } from '../../contexts/DataContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { format } from 'date-fns';
 
 const SupplierOrders = () => {
-  const { orders, deals, setOrders } = useData();
-  const { users } = useAuth();
+  const { orders, fetchOrders, updateOrder, loading } = useData();
+  const { user } = useAuth();
   const { language } = useLanguage();
 
-  // Assuming current supplier ID is 2
-  const myOrders = orders.filter(o => {
-    const deal = deals.find(d => d.id === o.dealId);
-    return deal?.supplierId === 2;
-  });
+  useEffect(() => {
+    if (user?.id) {
+      fetchOrders();
+    }
+  }, [user]);
 
-  const handleStatusChange = (orderId, newStatus) => {
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
+  const myOrders = orders.filter(o => o.deals?.supplier_id === user?.id);
+
+  const handleStatusChange = async (orderId, newStatus) => {
+    await updateOrder(orderId, { status: newStatus });
   };
 
   const getStatusColor = (status) => {
@@ -49,38 +51,37 @@ const SupplierOrders = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {myOrders.map((order) => {
-                const deal = deals.find(d => d.id === order.dealId);
-                const vendor = users.find(u => u.id === order.vendorId);
-                return (
-                  <tr key={order.id}>
-                    <td className="px-6 py-4">
-                      <div className="font-medium text-gray-900">#{order.id}</div>
-                      <div className="text-sm text-gray-500">{format(new Date(order.createdAt), 'MMM dd, yyyy')}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{vendor?.name || 'N/A'}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{deal?.product?.title || 'N/A'}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">₹{order.totalAmount.toFixed(2)}</td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(order.status)}`}>
-                        {order.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <select
-                        value={order.status}
-                        onChange={(e) => handleStatusChange(order.id, e.target.value)}
-                        className="text-sm border-gray-300 rounded-md"
-                      >
-                        <option value="pending">Pending</option>
-                        <option value="confirmed">Confirmed</option>
-                        <option value="shipped">Shipped</option>
-                        <option value="delivered">Delivered</option>
-                      </select>
-                    </td>
-                  </tr>
-                );
-              })}
+              {loading && myOrders.length === 0 ? (
+                <tr><td colSpan="6" className="text-center py-8">Loading orders...</td></tr>
+              ) : myOrders.map((order) => (
+                <tr key={order.id}>
+                  <td className="px-6 py-4">
+                    <div className="font-medium text-gray-900">#{order.id}</div>
+                    <div className="text-sm text-gray-500">{format(new Date(order.created_at), 'MMM dd, yyyy')}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{order.user_profiles?.full_name || 'N/A'}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{order.deals?.products?.title || 'N/A'}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">₹{order.total_amount.toFixed(2)}</td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`inline-flex capitalize px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(order.status)}`}>
+                      {order.status}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <select
+                      value={order.status}
+                      onChange={(e) => handleStatusChange(order.id, e.target.value)}
+                      className="text-sm border-gray-300 rounded-md"
+                      disabled={loading}
+                    >
+                      <option value="pending">Pending</option>
+                      <option value="confirmed">Confirmed</option>
+                      <option value="shipped">Shipped</option>
+                      <option value="delivered">Delivered</option>
+                    </select>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>

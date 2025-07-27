@@ -1,19 +1,22 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useData } from '../../contexts/DataContext';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { TrendingUp, Package, ShoppingBag, Clock } from 'lucide-react';
 import DealCard from '../Shared/DealCard';
 
 const VendorHome = () => {
-  const { deals: dealsRaw, orders: ordersRaw } = useData();
+  const { deals, orders, fetchDeals, fetchOrders } = useData();
+  const { user } = useAuth();
   const { t, language } = useLanguage();
 
-  // Defensive: default to empty arrays if undefined
-  const deals = Array.isArray(dealsRaw) ? dealsRaw : [];
-  const orders = Array.isArray(ordersRaw) ? ordersRaw : [];
+  useEffect(() => {
+    fetchDeals();
+    fetchOrders();
+  }, []);
 
-  const activeDeals = deals.filter(deal => deal.status === 'active' && deal.approved);
-  const myOrders = orders.filter(order => order.vendorId === 1); // Current user ID
+  const activeDeals = (deals || []).filter(deal => deal.status === 'active' && deal.is_approved);
+  const myOrders = (orders || []).filter(order => order.vendor_id === user?.id);
 
   const stats = [
     {
@@ -27,12 +30,6 @@ const VendorHome = () => {
       value: myOrders.length,
       icon: ShoppingBag,
       color: 'bg-green-500'
-    },
-    {
-      title: language === 'en' ? 'Products' : 'उत्पाद',
-      value: 156,
-      icon: Package,
-      color: 'bg-purple-500'
     },
     {
       title: language === 'en' ? 'Pending' : 'लंबित',
@@ -57,7 +54,7 @@ const VendorHome = () => {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-6">
         {stats.map((stat, index) => {
           const Icon = stat.icon;
           return (
@@ -120,17 +117,17 @@ const VendorHome = () => {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {myOrders.slice(0, 5).map((order) => {
-                  const deal = deals.find(d => d.id === order.dealId);
+                  const deal = deals.find(d => d.id === order.deal_id);
                   return (
                     <tr key={order.id}>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                         #{order.id}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {deal?.product?.title || 'Unknown Product'}
+                        {deal?.products?.title || 'Unknown Product'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        ₹{order.totalAmount.toFixed(2)}
+                        ₹{order.total_amount.toFixed(2)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${

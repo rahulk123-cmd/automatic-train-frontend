@@ -7,8 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview",
-    "setup": "node setup.js"
+    "preview": "vite preview"
   },
   "dependencies": {
     "@faker-js/faker": "^9.9.0",

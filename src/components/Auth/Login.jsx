@@ -1,22 +1,28 @@
-import React, { useState } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { Globe, Lock, Mail } from 'lucide-react';
-import { supabase } from '../../../lib/supabaseClient';
 
-
-const Login = () => {   
+const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   
-  const { login, user } = useAuth();
+  const { login, user, isAuthenticated } = useAuth();
   const { t, toggleLanguage, language } = useLanguage();
   const navigate = useNavigate();
 
-  // Remove auto-redirect in render; handle after login
+  useEffect(() => {
+    if (isAuthenticated && user?.role) {
+      navigate(`/${user.role}`);
+    }
+  }, [isAuthenticated, user, navigate]);
+
+  if (isAuthenticated && user?.role) {
+    return <Navigate to={`/${user.role}`} replace />;
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -25,58 +31,12 @@ const Login = () => {
   
     const result = await login(email, password);
   
-    if (result.success) {
-      const user = result.user;
-      if (!user || !user.id) {
-        setError('Login failed: user data missing.');
-        setLoading(false);
-        return;
-      }
-  
-      // Step 1: Check if profile exists
-      const { data: existingProfile, error: checkError } = await supabase
-        .from('user_profiles')
-        .select('id, role')
-        .eq('id', user.id)
-        .single();
-  
-      let userRole = existingProfile?.role || 'vendor'; // fallback to vendor
-  
-      // Step 2: If no profile exists, insert one
-      if (checkError && checkError.code === 'PGRST116'){
-        const { error: insertError } = await supabase.from('user_profiles').insert({
-          id: user.id,
-          email: user.email,
-          full_name: user.user_metadata?.full_name || '',
-          role: 'vendor', // or dynamic from demoCredentials if you want
-        });
-  
-        if (insertError) {
-          console.error('Failed to insert profile:', insertError.message);
-          setError('Could not complete login.');
-          setLoading(false);
-          return;
-        }
-        userRole = 'vendor';
-      }
-      // Redirect to dashboard based on user type
-      if (userRole === 'vendor') {
-        navigate('/vendor');
-      } else if (userRole === 'supplier') {
-        navigate('/supplier');
-      } else if (userRole === 'admin') {
-        navigate('/admin');
-      } else {
-        navigate('/vendor'); // fallback
-      }
-    } else {
-      setError(result.error || 'Login failed');
-      setLoading(false);
+    if (!result.success) {
+      setError(result.error || 'Login failed. Please check your credentials.');
     }
-  
+    // Redirection is handled by the useEffect hook
     setLoading(false);
   };
-  
 
   const demoCredentials = [
     { email: 'vendor@test.com', role: 'Vendor', roleHi: 'विक्रेता' },

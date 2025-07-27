@@ -1,42 +1,52 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useData } from '../../contexts/DataContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { Plus, Edit, Trash2 } from 'lucide-react';
 
 const AdminCategories = () => {
-  const { categories, setCategories } = useData();
+  const { categories, fetchCategories, addCategory, updateCategory, deleteCategory, loading } = useData();
   const { language } = useLanguage();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState(null);
-  const [newCategory, setNewCategory] = useState({ name: '', nameHi: '', icon: '' });
+  const [formData, setFormData] = useState({ name: '', name_hi: '', icon: '' });
 
-  const handleAdd = () => {
-    setCategories(prev => [...prev, { ...newCategory, id: Date.now() }]);
-    setIsModalOpen(false);
-    setNewCategory({ name: '', nameHi: '', icon: '' });
-  };
+  useEffect(() => {
+    fetchCategories();
+  }, []);
 
-  const handleEdit = () => {
-    setCategories(prev => prev.map(c => c.id === editingCategory.id ? editingCategory : c));
-    setIsModalOpen(false);
-    setEditingCategory(null);
-  };
-
-  const openEditModal = (category) => {
+  const openModal = (category = null) => {
     setEditingCategory(category);
+    if (category) {
+      setFormData({ name: category.name, name_hi: category.name_hi, icon: category.icon });
+    } else {
+      setFormData({ name: '', name_hi: '', icon: '' });
+    }
     setIsModalOpen(true);
   };
 
-  const handleDelete = (id) => {
-    setCategories(prev => prev.filter(c => c.id !== id));
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setEditingCategory(null);
+    setFormData({ name: '', name_hi: '', icon: '' });
   };
 
-  const handleSubmit = (e) => {
+  const handleChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (editingCategory) {
-      handleEdit();
+      await updateCategory(editingCategory.id, formData);
     } else {
-      handleAdd();
+      await addCategory(formData);
+    }
+    closeModal();
+  };
+
+  const handleDelete = async (id) => {
+    if (window.confirm(language === 'en' ? 'Are you sure?' : 'क्या आपको यकीन है?')) {
+      await deleteCategory(id);
     }
   };
 
@@ -47,7 +57,7 @@ const AdminCategories = () => {
           <h1 className="text-2xl font-bold text-gray-900">{language === 'en' ? 'Categories' : 'श्रेणियां'}</h1>
           <p className="mt-1 text-sm text-gray-600">{language === 'en' ? 'Manage product categories.' : 'उत्पाद श्रेणियों का प्रबंधन करें।'}</p>
         </div>
-        <button onClick={() => { setEditingCategory(null); setIsModalOpen(true); }} className="inline-flex items-center bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium">
+        <button onClick={() => openModal()} className="inline-flex items-center bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700">
           <Plus className="w-5 h-5 mr-2" />
           {language === 'en' ? 'Add Category' : 'श्रेणी जोड़ें'}
         </button>
@@ -55,18 +65,20 @@ const AdminCategories = () => {
 
       <div className="bg-white shadow rounded-lg">
         <ul className="divide-y divide-gray-200">
-          {categories.map(cat => (
+          {loading && categories.length === 0 ? (
+            <li className="px-6 py-4 text-center text-gray-500">Loading...</li>
+          ) : categories.map(cat => (
             <li key={cat.id} className="px-6 py-4 flex items-center justify-between">
               <div className="flex items-center">
                 <span className="text-2xl mr-4">{cat.icon}</span>
                 <div>
                   <p className="font-medium text-gray-900">{cat.name}</p>
-                  <p className="text-sm text-gray-500">{cat.nameHi}</p>
+                  <p className="text-sm text-gray-500">{cat.name_hi}</p>
                 </div>
               </div>
               <div className="space-x-2">
-                <button onClick={() => openEditModal(cat)} className="text-blue-600"><Edit className="w-5 h-5" /></button>
-                <button onClick={() => handleDelete(cat.id)} className="text-red-600"><Trash2 className="w-5 h-5" /></button>
+                <button onClick={() => openModal(cat)} className="text-blue-600 p-2 rounded-full hover:bg-blue-100"><Edit className="w-5 h-5" /></button>
+                <button onClick={() => handleDelete(cat.id)} className="text-red-600 p-2 rounded-full hover:bg-red-100"><Trash2 className="w-5 h-5" /></button>
               </div>
             </li>
           ))}
@@ -78,16 +90,17 @@ const AdminCategories = () => {
           <div className="bg-white rounded-lg max-w-lg w-full">
             <form onSubmit={handleSubmit}>
               <div className="p-4 border-b">
-                <h2 className="text-lg font-medium">{editingCategory ? 'Edit Category' : 'Add Category'}</h2>
+                <h2 className="text-lg font-medium">{editingCategory ? (language === 'en' ? 'Edit Category' : 'श्रेणी संपादित करें') : (language === 'en' ? 'Add Category' : 'श्रेणी जोड़ें')}</h2>
               </div>
               <div className="p-6 space-y-4">
                 <div>
                   <label className="block text-sm font-medium">Name (English)</label>
                   <input
                     type="text"
-                    value={editingCategory ? editingCategory.name : newCategory.name}
-                    onChange={e => editingCategory ? setEditingCategory({...editingCategory, name: e.target.value}) : setNewCategory({...newCategory, name: e.target.value})}
-                    className="mt-1 w-full border-gray-300 rounded-md"
+                    name="name"
+                    value={formData.name}
+                    onChange={handleChange}
+                    className="mt-1 w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
                     required
                   />
                 </div>
@@ -95,9 +108,10 @@ const AdminCategories = () => {
                   <label className="block text-sm font-medium">Name (Hindi)</label>
                   <input
                     type="text"
-                    value={editingCategory ? editingCategory.nameHi : newCategory.nameHi}
-                    onChange={e => editingCategory ? setEditingCategory({...editingCategory, nameHi: e.target.value}) : setNewCategory({...newCategory, nameHi: e.target.value})}
-                    className="mt-1 w-full border-gray-300 rounded-md"
+                    name="name_hi"
+                    value={formData.name_hi}
+                    onChange={handleChange}
+                    className="mt-1 w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
                     required
                   />
                 </div>
@@ -105,16 +119,19 @@ const AdminCategories = () => {
                   <label className="block text-sm font-medium">Icon (Emoji)</label>
                   <input
                     type="text"
-                    value={editingCategory ? editingCategory.icon : newCategory.icon}
-                    onChange={e => editingCategory ? setEditingCategory({...editingCategory, icon: e.target.value}) : setNewCategory({...newCategory, icon: e.target.value})}
-                    className="mt-1 w-full border-gray-300 rounded-md"
+                    name="icon"
+                    value={formData.icon}
+                    onChange={handleChange}
+                    className="mt-1 w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
                     required
                   />
                 </div>
               </div>
               <div className="p-4 bg-gray-50 flex justify-end space-x-2">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 bg-white border rounded-md">Cancel</button>
-                <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-md">Save</button>
+                <button type="button" onClick={closeModal} className="px-4 py-2 bg-white border rounded-md">Cancel</button>
+                <button type="submit" disabled={loading} className="px-4 py-2 bg-blue-600 text-white rounded-md disabled:opacity-50">
+                  {loading ? 'Saving...' : 'Save'}
+                </button>
               </div>
             </form>
           </div>

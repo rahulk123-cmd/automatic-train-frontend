@@ -1,374 +1,317 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { productsAPI, suppliersAPI, groupOrdersAPI, adminAPI } from '../services/api';
+import React, { createContext, useContext, useState } from 'react';
+import { supabase } from '../../lib/supabaseClient';
 
 const DataContext = createContext();
 
 export const useData = () => {
   const context = useContext(DataContext);
   if (!context) {
-    throw new Error('useData must be used within DataProvider');
+    throw new Error('useData must be used within a DataProvider');
   }
   return context;
 };
 
 export const DataProvider = ({ children }) => {
   const [products, setProducts] = useState([]);
-  const [suppliers, setSuppliers] = useState([]);
-  const [groupOrders, setGroupOrders] = useState([]);
+  const [users, setUsers] = useState([]);
   const [categories, setCategories] = useState([]);
-  const [notifications, setNotifications] = useState([]);
+  const [deals, setDeals] = useState([]);
+  const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Load initial data
-  useEffect(() => {
-    loadInitialData();
-  }, []);
+  const handleError = (error, message) => {
+    console.error(message, error);
+    setError(`${message}: ${error.message}`);
+  };
 
-  const loadInitialData = async () => {
+  // --- User Management ---
+  const fetchUsers = async (filter = {}) => {
+    setLoading(true);
     try {
-      setLoading(true);
-      setError(null);
-      
-      const [productsRes, suppliersRes, categoriesRes] = await Promise.all([
-        productsAPI.getAll({ limit: 50 }),
-        suppliersAPI.getAll({ status: 'approved' }),
-        productsAPI.getCategories()
-      ]);
-
-      setProducts(productsRes.data.data || []);
-      setSuppliers(suppliersRes.data.data || []);
-      setCategories(categoriesRes.data.data || []);
-    } catch (error) {
-      if (error.response) {
-        console.error('Failed to load initial data:', error.response.data || error.response);
-      } else {
-        console.error('Failed to load initial data:', error);
+      let query = supabase.from('user_profiles').select('*');
+      if (filter.role) {
+        query = query.eq('role', filter.role);
       }
-      setError('Failed to load data. Please try again.');
+      const { data, error } = await query;
+      if (error) throw error;
+      setUsers(data || []);
+    } catch (e) {
+      handleError(e, 'Failed to fetch users');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  const updateUserVerification = async (userId, isVerified) => {
+    setLoading(true);
+    try {
+        const { data, error } = await supabase
+            .from('user_profiles')
+            .update({ is_verified: isVerified })
+            .eq('id', userId)
+            .select()
+            .single();
+
+        if (error) throw error;
+        setUsers(prevUsers => 
+            prevUsers.map(user => user.id === userId ? data : user)
+        );
+    } catch (e) {
+        handleError(e, 'Failed to update user verification status');
+    } finally {
+        setLoading(false);
+    }
+  };
+
+  // --- Category Management ---
+  const fetchCategories = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.from('categories').select('*').order('name', { ascending: true });
+      if (error) throw error;
+      setCategories(data || []);
+    } catch (e) {
+      handleError(e, 'Failed to fetch categories');
     } finally {
       setLoading(false);
     }
   };
 
-  // Products
-  const fetchProducts = async (params = {}) => {
+  const addCategory = async (categoryData) => {
+    setLoading(true);
     try {
-      setLoading(true);
-      const response = await productsAPI.getAll(params);
-      setProducts(response.data.data || []);
-      return response.data;
-    } catch (error) {
-      console.error('Failed to fetch products:', error);
-      setError('Failed to load products');
-      throw error;
+      const { data, error } = await supabase.from('categories').insert(categoryData).select().single();
+      if (error) throw error;
+      setCategories(prev => [...prev, data]);
+    } catch(e) {
+      handleError(e, 'Failed to add category');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  const updateCategory = async (id, categoryData) => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.from('categories').update(categoryData).eq('id', id).select().single();
+      if (error) throw error;
+      setCategories(prev => prev.map(c => c.id === id ? data : c));
+    } catch(e) {
+      handleError(e, 'Failed to update category');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const deleteCategory = async (id) => {
+    setLoading(true);
+    try {
+      const { error } = await supabase.from('categories').delete().eq('id', id);
+      if (error) throw error;
+      setCategories(prev => prev.filter(c => c.id !== id));
+    } catch(e) {
+      handleError(e, 'Failed to delete category');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+
+  // --- Product Management ---
+  const fetchProducts = async (supplierId = null) => {
+    setLoading(true);
+    try {
+      let query = supabase.from('products').select('*, categories(name, name_hi)');
+      if (supplierId) {
+        query = query.eq('supplier_id', supplierId);
+      }
+      const { data, error } = await query;
+      if (error) throw error;
+      setProducts(data || []);
+    } catch (e) {
+      handleError(e, 'Failed to fetch products');
     } finally {
       setLoading(false);
     }
   };
 
   const addProduct = async (productData) => {
+    setLoading(true);
     try {
-      setLoading(true);
-      const response = await productsAPI.create(productData);
-      const newProduct = response.data;
-      setProducts(prev => [...prev, newProduct]);
-      addNotification({
-        type: 'success',
-        message: 'Product added successfully',
-        timestamp: new Date()
-      });
-      return newProduct;
-    } catch (error) {
-      console.error('Failed to add product:', error);
-      setError('Failed to add product');
-      throw error;
+        const { data, error } = await supabase.from('products').insert(productData).select('*, categories(name, name_hi)').single();
+        if (error) throw error;
+        setProducts(prev => [...prev, data]);
+    } catch (e) {
+        handleError(e, 'Failed to add product');
     } finally {
-      setLoading(false);
+        setLoading(false);
     }
   };
 
   const updateProduct = async (id, productData) => {
+    setLoading(true);
     try {
-      setLoading(true);
-      const response = await productsAPI.update(id, productData);
-      const updatedProduct = response.data;
-      setProducts(prev => prev.map(p => p.id === id ? updatedProduct : p));
-      addNotification({
-        type: 'success',
-        message: 'Product updated successfully',
-        timestamp: new Date()
-      });
-      return updatedProduct;
-    } catch (error) {
-      console.error('Failed to update product:', error);
-      setError('Failed to update product');
-      throw error;
+        const { data, error } = await supabase.from('products').update(productData).eq('id', id).select('*, categories(name, name_hi)').single();
+        if (error) throw error;
+        setProducts(prev => prev.map(p => p.id === id ? data : p));
+    } catch (e) {
+        handleError(e, 'Failed to update product');
     } finally {
-      setLoading(false);
+        setLoading(false);
     }
   };
 
   const deleteProduct = async (id) => {
+    setLoading(true);
     try {
-      setLoading(true);
-      await productsAPI.delete(id);
-      setProducts(prev => prev.filter(p => p.id !== id));
-      addNotification({
-        type: 'success',
-        message: 'Product deleted successfully',
-        timestamp: new Date()
+        const { error } = await supabase.from('products').delete().eq('id', id);
+        if (error) throw error;
+        setProducts(prev => prev.filter(p => p.id !== id));
+    } catch (e) {
+        handleError(e, 'Failed to delete product');
+    } finally {
+        setLoading(false);
+    }
+  };
+  
+  // --- Deal & Order Management ---
+  const fetchDeals = async (supplierId = null) => {
+    setLoading(true);
+    try {
+      let query = supabase.from('deals').select('*, products(*)');
+      if (supplierId) {
+        query = query.eq('supplier_id', supplierId);
+      }
+      const { data, error } = await query;
+      if (error) throw error;
+      setDeals(data || []);
+    } catch(e) {
+      handleError(e, 'Failed to fetch deals');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  const startDeal = async (dealData) => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.from('deals').insert(dealData).select('*, products(*)').single();
+      if (error) throw error;
+      setDeals(prev => [...prev, data]);
+    } catch (e) {
+      handleError(e, 'Failed to start deal');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const updateDeal = async (dealId, updateData) => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.from('deals').update(updateData).eq('id', dealId).select('*, products(*)').single();
+      if (error) throw error;
+      setDeals(prev => prev.map(d => d.id === dealId ? data : d));
+    } catch (e) {
+      handleError(e, 'Failed to update deal');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const approveDeal = (dealId) => updateDeal(dealId, { is_approved: true });
+  const rejectDeal = (dealId) => updateDeal(dealId, { is_approved: false, status: 'rejected' });
+
+  const fetchOrders = async (options = {}) => {
+    setLoading(true);
+    try {
+      let query = supabase.from('orders').select('*, deals(*, products(*)), user_profiles!orders_vendor_id_fkey(*)');
+      if (options.vendorId) {
+        query = query.eq('vendor_id', options.vendorId);
+      }
+      const { data, error } = await query;
+      if (error) throw error;
+      setOrders(data || []);
+    } catch(e) {
+      handleError(e, 'Failed to fetch orders');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const updateOrder = async (orderId, updateData) => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.from('orders').update(updateData).eq('id', orderId).select().single();
+      if (error) throw error;
+      await fetchOrders(); // Refetch to get fresh joined data
+    } catch (e) {
+      handleError(e, 'Failed to update order');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const joinDeal = async ({ dealId, vendorId, quantity, totalAmount }) => {
+    setLoading(true);
+    try {
+      const { data: orderData, error: orderError } = await supabase
+        .from('orders')
+        .insert({
+          deal_id: dealId,
+          vendor_id: vendorId,
+          quantity,
+          total_amount: totalAmount,
+          status: 'confirmed',
+          payment_method: 'UPI',
+        })
+        .select()
+        .single();
+      if (orderError) throw orderError;
+
+      const { error: rpcError } = await supabase.rpc('increment_deal_counts', {
+        deal_id_to_update: dealId,
+        quantity_to_add: quantity,
       });
-    } catch (error) {
-      console.error('Failed to delete product:', error);
-      setError('Failed to delete product');
-      throw error;
+      if (rpcError) throw rpcError;
+
+      await fetchDeals();
+      await fetchOrders();
+      return { success: true, order: orderData };
+    } catch (e) {
+      handleError(e, 'Failed to join deal');
+      return { success: false, error: e };
     } finally {
       setLoading(false);
     }
-  };
-
-  // Suppliers
-  const fetchSuppliers = async (params = {}) => {
-    try {
-      setLoading(true);
-      const response = await suppliersAPI.getAll(params);
-      setSuppliers(response.data.data || []);
-      return response.data;
-    } catch (error) {
-      console.error('Failed to fetch suppliers:', error);
-      setError('Failed to load suppliers');
-      throw error;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const addSupplier = async (supplierData) => {
-    try {
-      setLoading(true);
-      const response = await suppliersAPI.create(supplierData);
-      const newSupplier = response.data;
-      setSuppliers(prev => [...prev, newSupplier]);
-      addNotification({
-        type: 'success',
-        message: 'Supplier added successfully',
-        timestamp: new Date()
-      });
-      return newSupplier;
-    } catch (error) {
-      console.error('Failed to add supplier:', error);
-      setError('Failed to add supplier');
-      throw error;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const updateSupplier = async (id, supplierData) => {
-    try {
-      setLoading(true);
-      const response = await suppliersAPI.update(id, supplierData);
-      const updatedSupplier = response.data;
-      setSuppliers(prev => prev.map(s => s.id === id ? updatedSupplier : s));
-      addNotification({
-        type: 'success',
-        message: 'Supplier updated successfully',
-        timestamp: new Date()
-      });
-      return updatedSupplier;
-    } catch (error) {
-      console.error('Failed to update supplier:', error);
-      setError('Failed to update supplier');
-      throw error;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Group Orders
-  const fetchGroupOrders = async (params = {}) => {
-    try {
-      setLoading(true);
-      const response = await groupOrdersAPI.getAll(params);
-      setGroupOrders(response.data.data || []);
-      return response.data;
-    } catch (error) {
-      console.error('Failed to fetch group orders:', error);
-      setError('Failed to load group orders');
-      throw error;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const createGroupOrder = async (orderData) => {
-    try {
-      setLoading(true);
-      const response = await groupOrdersAPI.create(orderData);
-      const newOrder = response.data;
-      setGroupOrders(prev => [...prev, newOrder]);
-      addNotification({
-        type: 'success',
-        message: 'Group order created successfully',
-        timestamp: new Date()
-      });
-      return newOrder;
-    } catch (error) {
-      console.error('Failed to create group order:', error);
-      setError('Failed to create group order');
-      throw error;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const joinGroupOrder = async (orderId, joinData) => {
-    try {
-      setLoading(true);
-      const response = await groupOrdersAPI.join(orderId, joinData);
-      const updatedOrder = response.data;
-      setGroupOrders(prev => prev.map(o => o.id === orderId ? updatedOrder : o));
-      addNotification({
-        type: 'success',
-        message: 'Successfully joined group order',
-        timestamp: new Date()
-      });
-      return updatedOrder;
-    } catch (error) {
-      console.error('Failed to join group order:', error);
-      setError('Failed to join group order');
-      throw error;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const confirmGroupOrder = async (orderId, confirmData) => {
-    try {
-      setLoading(true);
-      const response = await groupOrdersAPI.confirm(orderId, confirmData);
-      const updatedOrder = response.data;
-      setGroupOrders(prev => prev.map(o => o.id === orderId ? updatedOrder : o));
-      addNotification({
-        type: 'success',
-        message: 'Group order confirmed successfully',
-        timestamp: new Date()
-      });
-      return updatedOrder;
-    } catch (error) {
-      console.error('Failed to confirm group order:', error);
-      setError('Failed to confirm group order');
-      throw error;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Admin functions
-  const fetchDashboardMetrics = async () => {
-    try {
-      setLoading(true);
-      const response = await adminAPI.getDashboardMetrics();
-      return response.data;
-    } catch (error) {
-      console.error('Failed to fetch dashboard metrics:', error);
-      setError('Failed to load dashboard metrics');
-      throw error;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchAllUsers = async (params = {}) => {
-    try {
-      setLoading(true);
-      const response = await adminAPI.getAllUsers(params);
-      return response.data;
-    } catch (error) {
-      console.error('Failed to fetch users:', error);
-      setError('Failed to load users');
-      throw error;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const approveSupplier = async (supplierId, status) => {
-    try {
-      setLoading(true);
-      const response = await adminAPI.approveSupplier(supplierId, status);
-      const updatedSupplier = response.data;
-      setSuppliers(prev => prev.map(s => s.id === supplierId ? updatedSupplier : s));
-      addNotification({
-        type: 'success',
-        message: `Supplier ${status === 'approved' ? 'approved' : 'rejected'} successfully`,
-        timestamp: new Date()
-      });
-      return updatedSupplier;
-    } catch (error) {
-      console.error('Failed to approve supplier:', error);
-      setError('Failed to approve supplier');
-      throw error;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Notifications
-  const addNotification = (notification) => {
-    const newNotification = {
-      id: Date.now(),
-      ...notification
-    };
-    setNotifications(prev => [newNotification, ...prev.slice(0, 19)]);
-  };
-
-  const clearNotifications = () => {
-    setNotifications([]);
-  };
-
-  const clearError = () => {
-    setError(null);
   };
 
   const value = {
-    // State
+    users,
     products,
-    suppliers,
-    groupOrders,
     categories,
-    notifications,
+    deals,
+    orders,
     loading,
     error,
-    
-    // Product functions
+    fetchUsers,
+    updateUserVerification,
+    fetchCategories,
+    addCategory,
+    updateCategory,
+    deleteCategory,
     fetchProducts,
     addProduct,
     updateProduct,
     deleteProduct,
-    
-    // Supplier functions
-    fetchSuppliers,
-    addSupplier,
-    updateSupplier,
-    
-    // Group Order functions
-    fetchGroupOrders,
-    createGroupOrder,
-    joinGroupOrder,
-    confirmGroupOrder,
-    
-    // Admin functions
-    fetchDashboardMetrics,
-    fetchAllUsers,
-    approveSupplier,
-    
-    // Utility functions
-    addNotification,
-    clearNotifications,
-    clearError,
-    loadInitialData,
+    fetchDeals,
+    startDeal,
+    updateDeal,
+    approveDeal,
+    rejectDeal,
+    fetchOrders,
+    updateOrder,
+    joinDeal,
   };
 
   return (

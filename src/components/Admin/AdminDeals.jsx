@@ -1,24 +1,28 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useData } from '../../contexts/DataContext';
 import { useLanguage } from '../../contexts/LanguageContext';
-import { Check, X, Filter } from 'lucide-react';
+import { Check, X } from 'lucide-react';
 
 const AdminDeals = () => {
-  const { deals, approveDeal, rejectDeal } = useData();
+  const { deals, approveDeal, rejectDeal, fetchDeals, loading } = useData();
   const { language } = useLanguage();
   const [filter, setFilter] = useState('pending');
 
+  useEffect(() => {
+    fetchDeals();
+  }, []);
+
   const filteredDeals = deals.filter(deal => {
-    if (filter === 'pending') return !deal.approved && deal.status !== 'rejected';
-    if (filter === 'approved') return deal.approved;
+    if (filter === 'pending') return !deal.is_approved && deal.status !== 'rejected';
+    if (filter === 'approved') return deal.is_approved;
     if (filter === 'rejected') return deal.status === 'rejected';
     return true;
   });
 
   const getStatusBadge = (deal) => {
-    if (!deal.approved && deal.status !== 'rejected') return <span className="text-xs font-medium bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full">Pending</span>;
+    if (!deal.is_approved && deal.status !== 'rejected') return <span className="text-xs font-medium bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full">Pending</span>;
     if (deal.status === 'rejected') return <span className="text-xs font-medium bg-red-100 text-red-800 px-2 py-1 rounded-full">Rejected</span>;
-    if (deal.approved) return <span className="text-xs font-medium bg-green-100 text-green-800 px-2 py-1 rounded-full">Approved</span>;
+    if (deal.is_approved) return <span className="text-xs font-medium bg-green-100 text-green-800 px-2 py-1 rounded-full">Approved</span>;
     return null;
   };
   
@@ -49,11 +53,13 @@ const AdminDeals = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredDeals.map((deal) => (
+              {loading && filteredDeals.length === 0 ? (
+                <tr><td colSpan="5" className="text-center py-8">Loading deals...</td></tr>
+              ) : filteredDeals.map((deal) => (
                 <tr key={deal.id}>
-                  <td className="px-6 py-4 font-medium">{deal.product.title}</td>
-                  <td className="px-6 py-4 text-sm text-gray-500">{deal.supplierId}</td>
-                  <td className="px-6 py-4 text-sm text-gray-500">{deal.currentCount}/{deal.moq}</td>
+                  <td className="px-6 py-4 font-medium">{deal.products?.title || 'N/A'}</td>
+                  <td className="px-6 py-4 text-sm text-gray-500">{deal.supplier_id}</td>
+                  <td className="px-6 py-4 text-sm text-gray-500">{deal.current_count}/{deal.moq}</td>
                   <td className="px-6 py-4">{getStatusBadge(deal)}</td>
                   <td className="px-6 py-4 space-x-2">
                     {filter === 'pending' && (

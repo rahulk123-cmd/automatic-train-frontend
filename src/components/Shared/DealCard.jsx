@@ -1,43 +1,56 @@
 import React, { useState } from 'react';
 import { useData } from '../../contexts/DataContext';
 import { useLanguage } from '../../contexts/LanguageContext';
-import { Clock, Users, TrendingUp, ShoppingCart } from 'lucide-react';
-import { format } from 'date-fns';
+import { useAuth } from '../../contexts/AuthContext';
+import { Clock, Users, ShoppingCart, Loader } from 'lucide-react';
 import UPIPaymentModal from './UPIPaymentModal';
 
-const DealCard = ({ deal, userRole }) => {
-  const { joinDeal } = useData();
+const DealCard = ({ deal }) => {
+  const { joinDeal, loading } = useData();
+  const { user } = useAuth();
   const { language } = useLanguage();
   const [showPayment, setShowPayment] = useState(false);
   const [quantity, setQuantity] = useState(1);
+  const [isJoining, setIsJoining] = useState(false);
 
-  const timeLeft = new Date(deal.endTime) - new Date();
+  if (!deal || !deal.products) {
+    return null;
+  }
+
+  const timeLeft = new Date(deal.end_time) - new Date();
   const daysLeft = Math.max(0, Math.ceil(timeLeft / (1000 * 60 * 60 * 24)));
+  const progress = deal.moq > 0 ? (deal.current_count / deal.moq) * 100 : 0;
 
-  const handleJoinDeal = () => {
-    if (userRole === 'vendor') {
+  const handleJoinClick = () => {
+    if (user?.role === 'vendor') {
       setShowPayment(true);
     }
   };
 
-  const handlePaymentComplete = (paymentData) => {
-    joinDeal(deal.id, quantity, 1); // Current vendor ID
+  const handlePaymentComplete = async () => {
+    setIsJoining(true);
+    await joinDeal({
+      dealId: deal.id,
+      vendorId: user.id,
+      quantity,
+      totalAmount: deal.products.bulk_price * quantity,
+    });
     setShowPayment(false);
-    setQuantity(1);
+    setIsJoining(false);
   };
 
   return (
     <>
-      <div className="bg-white rounded-lg shadow hover:shadow-md transition-shadow overflow-hidden">
+      <div className="bg-white rounded-lg shadow hover:shadow-md transition-shadow overflow-hidden flex flex-col">
         <img
-          src={deal.product.image}
-          alt={deal.product.title}
+          src={deal.products.image_url}
+          alt={deal.products.title}
           className="w-full h-48 object-cover"
         />
         
-        <div className="p-4">
-          <h3 className="font-medium text-gray-900 mb-2 line-clamp-2">
-            {deal.product.title}
+        <div className="p-4 flex flex-col flex-grow">
+          <h3 className="font-medium text-gray-900 mb-2 line-clamp-2 flex-grow">
+            {deal.products.title}
           </h3>
           
           <div className="flex items-center justify-between text-sm text-gray-600 mb-3">
@@ -50,51 +63,39 @@ const DealCard = ({ deal, userRole }) => {
             </div>
             <div className="flex items-center">
               <Users className="w-4 h-4 mr-1" />
-              {deal.participants}
+              {deal.participants_count || 0}
             </div>
           </div>
 
-          {/* Progress Bar */}
           <div className="mb-3">
             <div className="flex justify-between text-sm text-gray-600 mb-1">
               <span>{language === 'en' ? 'Progress' : 'प्रगति'}</span>
-              <span>{deal.currentCount}/{deal.moq}</span>
+              <span>{deal.current_count || 0}/{deal.moq}</span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-2">
               <div 
                 className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                style={{ width: `${Math.min(deal.progress, 100)}%` }}
+                style={{ width: `${Math.min(progress, 100)}%` }}
               ></div>
-            </div>
-            <div className="text-center text-sm font-medium text-gray-900 mt-1">
-              {deal.progress.toFixed(1)}%
             </div>
           </div>
 
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-baseline justify-between mb-4 mt-auto">
             <div>
               <div className="text-sm text-gray-600">
                 {language === 'en' ? 'Bulk Price' : 'थोक मूल्य'}
               </div>
-              <div className="text-lg font-bold text-gray-900">
-                ₹{deal.product.bulkPrice.toFixed(2)}
-              </div>
-            </div>
-            <div className="text-right">
-              <div className="text-sm text-gray-600">
-                {language === 'en' ? 'Regular' : 'नियमित'}
-              </div>
-              <div className="text-sm text-gray-500 line-through">
-                ₹{deal.product.price.toFixed(2)}
+              <div className="text-xl font-bold text-gray-900">
+                ₹{deal.products.bulk_price.toFixed(2)}
               </div>
             </div>
           </div>
 
-          {userRole === 'vendor' && deal.status === 'active' && deal.approved && (
+          {user?.role === 'vendor' && deal.status === 'active' && deal.is_approved && (
             <div className="space-y-3">
               <div className="flex items-center space-x-2">
                 <label className="text-sm font-medium text-gray-700">
-                  {language === 'en' ? 'Quantity:' : 'मात्रा:'}
+                  {language === 'en' ? 'Qty:' : 'मात्रा:'}
                 </label>
                 <input
                   type="number"
@@ -107,33 +108,17 @@ const DealCard = ({ deal, userRole }) => {
               </div>
               
               <button
-                onClick={handleJoinDeal}
-                className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center"
+                onClick={handleJoinClick}
+                disabled={isJoining || loading}
+                className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center disabled:opacity-50"
               >
-                <ShoppingCart className="w-4 h-4 mr-2" />
-                {language === 'en' ? 'Join Deal' : 'डील में शामिल हों'}
+                {isJoining ? <Loader className="w-4 h-4 mr-2 animate-spin" /> : <ShoppingCart className="w-4 h-4 mr-2" />}
+                {isJoining ? (language === 'en' ? 'Joining...' : 'शामिल हो रहे हैं...') : (language === 'en' ? 'Join Deal' : 'डील में शामिल हों')}
               </button>
               
               <div className="text-center text-sm text-gray-600">
-                {language === 'en' ? 'Total:' : 'कुल:'} ₹{(deal.product.bulkPrice * quantity).toFixed(2)}
+                {language === 'en' ? 'Total:' : 'कुल:'} ₹{(deal.products.bulk_price * quantity).toFixed(2)}
               </div>
-            </div>
-          )}
-
-          {deal.status === 'completed' && (
-            <div className="text-center">
-              <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
-                <TrendingUp className="w-4 h-4 mr-1" />
-                {language === 'en' ? 'Deal Completed' : 'डील पूर्ण'}
-              </span>
-            </div>
-          )}
-
-          {!deal.approved && userRole === 'vendor' && (
-            <div className="text-center">
-              <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800">
-                {language === 'en' ? 'Pending Approval' : 'अनुमोदन लंबित'}
-              </span>
             </div>
           )}
         </div>
@@ -144,8 +129,8 @@ const DealCard = ({ deal, userRole }) => {
           isOpen={showPayment}
           onClose={() => setShowPayment(false)}
           onComplete={handlePaymentComplete}
-          amount={deal.product.bulkPrice * quantity}
-          dealTitle={deal.product.title}
+          amount={deal.products.bulk_price * quantity}
+          dealTitle={deal.products.title}
           quantity={quantity}
         />
       )}
