@@ -18,9 +18,10 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
   }
 
   if (allowedRoles && !allowedRoles.includes(user.role)) {
-    // Redirect to their own dashboard or a generic unauthorized page
-    // For now, redirecting to login is a safe default
-    return <Navigate to="/login" replace />;
+    // If the user is authenticated but has the wrong role, redirect them to the login page
+    // with a specific error message. This helps diagnose role-based access issues.
+    const errorMessage = `Access Denied. Your account role is "${user.role || 'not set'}", but this page requires the "${allowedRoles.join(' or ')}" role.`;
+    return <Navigate to="/login" state={{ error: errorMessage }} replace />;
   }
 
   return children;

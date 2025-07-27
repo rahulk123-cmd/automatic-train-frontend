@@ -50,7 +50,7 @@ const SupplierProducts = () => {
       await addProduct({
         ...dataToSubmit,
         supplier_id: user.id,
-        image_url: `https://img-wrapper.vercel.app/image?url=https://img-wrapper.vercel.app/image?url=https://placehold.co/600x400/EEE/31343C?text=${encodeURIComponent(productData.title)}`,
+        image_url: `https://img-wrapper.vercel.app/image?url=https://img-wrapper.vercel.app/image?url=https://img-wrapper.vercel.app/image?url=https://placehold.co/600x400/EEE/31343C?text=${encodeURIComponent(productData.title)}`,
         is_verified: false, // Default to not verified
       });
     }

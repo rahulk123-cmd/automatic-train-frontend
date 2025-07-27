@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { Globe, Lock, Mail } from 'lucide-react';
@@ -13,14 +13,25 @@ const Login = () => {
   const { login, user, isAuthenticated } = useAuth();
   const { t, toggleLanguage, language } = useLanguage();
   const navigate = useNavigate();
+  const location = useLocation();
 
-  // This effect handles redirection both on initial load (if already logged in)
-  // and after a successful login action.
+  // This effect handles redirection after a successful login.
   useEffect(() => {
     if (isAuthenticated && user?.role) {
+      // Clear any login errors on successful authentication
+      if (error) setError(''); 
       navigate(`/${user.role}`, { replace: true });
     }
-  }, [isAuthenticated, user, navigate]);
+  }, [isAuthenticated, user, navigate, error]);
+
+  // This effect checks for error messages passed from other routes (e.g., ProtectedRoute).
+  useEffect(() => {
+    if (location.state?.error) {
+      setError(location.state.error);
+      // Clear the location state to prevent the error from re-appearing on refresh.
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location, navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -32,15 +43,18 @@ const Login = () => {
     setLoading(false);
     
     if (!result.success) {
+      // This will catch errors from the login attempt itself (e.g., wrong password).
       setError(result.error || 'Login failed. Please check your credentials.');
     }
-    // On success, the useEffect will handle the navigation.
+    // On success, the redirection useEffect will handle navigation.
+    // If there's a role issue, the user will be redirected back here,
+    // and the second useEffect will catch and display the error message.
   };
 
   const demoCredentials = [
-    { email: 'vendor@test.com', role: 'Vendor', roleHi: 'विक्रेता' },
-    { email: 'supplier@test.com', role: 'Supplier', roleHi: 'आपूर्तिकर्ता' },
-    { email: 'admin@test.com', role: 'Admin', roleHi: 'व्यवस्थापक' }
+    { email: 'vendor@test.com', password: 'password', role: 'Vendor', roleHi: 'विक्रेता' },
+    { email: 'supplier1@email.com', password: 'password123', role: 'Supplier', roleHi: 'आपूर्तिकर्ता' },
+    { email: 'admin@test.com', password: 'password', role: 'Admin', roleHi: 'व्यवस्थापक' }
   ];
 
   return (
@@ -127,14 +141,14 @@ const Login = () => {
                   key={index}
                   onClick={() => {
                     setEmail(cred.email);
-                    setPassword('password');
+                    setPassword(cred.password);
                   }}
                   className="w-full text-left p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
                 >
                   <div className="font-medium text-sm">
                     {language === 'en' ? cred.role : cred.roleHi}
                   </div>
-                  <div className="text-xs text-gray-600">{cred.email}</div>
+                  <div className="text-xs text-gray-600">{cred.email} / {cred.password}</div>
                 </button>
               ))}
             </div>
